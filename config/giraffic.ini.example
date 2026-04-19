@@ -1,0 +1,13 @@
+[database]
+host=localhost
+port=5432
+name=giraffic_db
+
+guest_user=giraffic_guest
+guest_password=guest_password
+
+admin_user=giraffic_admin
+admin_password=admin
+
+manager_user=giraffic_manager
+manager_password=manager
