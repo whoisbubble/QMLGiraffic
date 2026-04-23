@@ -5,8 +5,10 @@ import QtQuick.Window
 Window {
     id: workersWin
 
-    width: 980
-    height: 650
+    width: 1040
+    height: 760
+    minimumWidth: 980
+    minimumHeight: 720
     title: "Сотрудники"
     flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
@@ -150,6 +152,7 @@ Window {
                 AppPanel {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    Layout.minimumHeight: 290
                     title: "Новый сотрудник"
                     subtitle: "ФИО, телефон и email"
                     accent: theme.leaf
@@ -202,6 +205,7 @@ Window {
                 AppPanel {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    Layout.minimumHeight: 330
                     title: "Недоступность"
                     subtitle: "Отпуск, болезнь или занятость"
                     accent: theme.danger
