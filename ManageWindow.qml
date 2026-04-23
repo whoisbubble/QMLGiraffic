@@ -29,9 +29,15 @@ Window {
     property var loginWindow: null
 
     function refreshAll() {
+        eventsData = dbManager.getEventsList(filterFrom.text, filterTo.text)
+        if (manageWin.isGuest) {
+            workersData = []
+            rolesData = []
+            return
+        }
+
         workersData = dbManager.getWorkersList()
         rolesData = dbManager.getRolesList()
-        eventsData = dbManager.getEventsList(filterFrom.text, filterTo.text)
     }
 
     function openWindow(fileName, options) {
@@ -50,9 +56,7 @@ Window {
     }
 
     Component.onCompleted: {
-        if (!manageWin.isGuest) {
-            refreshAll()
-        }
+        refreshAll()
     }
 
     Rectangle {
@@ -214,7 +218,7 @@ Window {
                     color: theme.surface
                     border.color: theme.danger
                     z: 10
-                    visible: manageWin.isGuest
+                    visible: false
 
                     ColumnLayout {
                         anchors.centerIn: parent
@@ -243,11 +247,12 @@ Window {
                     anchors.fill: parent
                     anchors.margins: 18
                     spacing: 16
-                    enabled: !manageWin.isGuest
-                    opacity: manageWin.isGuest ? 0.12 : 1.0
+                    enabled: true
+                    opacity: 1.0
 
                     AppPanel {
                         Layout.fillHeight: true
+                        Layout.fillWidth: manageWin.isGuest
                         Layout.preferredWidth: Math.max(660, parent.width * 0.64)
                         title: "Лента мероприятий"
                         subtitle: "Фильтр, просмотр и быстрые действия"
@@ -281,6 +286,7 @@ Window {
                                 AppButton {
                                     text: "Копировать"
                                     variant: "blue"
+                                    visible: !manageWin.isGuest
                                     Layout.preferredWidth: 132
                                     onClicked: {
                                         var textToCopy = dbManager.getAllEventsText(filterFrom.text, filterTo.text)
@@ -292,6 +298,7 @@ Window {
                                 AppButton {
                                     text: "Новое"
                                     variant: "green"
+                                    visible: !manageWin.isGuest
                                     Layout.preferredWidth: 100
                                     onClicked: manageWin.openWindow("AddEventWindow.qml", { "owner": manageWin })
                                 }
@@ -313,13 +320,26 @@ Window {
                                 model: manageWin.eventsData
 
                                 delegate: Rectangle {
+                                    property int assignedCount: Number(modelData.assignedCount || 0)
+                                    property bool underStaffed: assignedCount < 3
+
                                     width: eventsList.width
                                     height: 76
                                     radius: 8
                                     color: manageWin.selectedEventId === modelData.id ? Qt.rgba(245 / 255, 200 / 255, 75 / 255, 0.18)
-                                                                                      : (eventMouseArea.containsMouse ? theme.surfaceHigh : "#1d241f")
-                                    border.color: manageWin.selectedEventId === modelData.id ? theme.amber : theme.line
+                                                                                      : (underStaffed ? Qt.rgba(231 / 255, 91 / 255, 91 / 255, 0.13)
+                                                                                                      : (eventMouseArea.containsMouse ? theme.surfaceHigh : "#1d241f"))
+                                    border.color: underStaffed ? theme.danger : (manageWin.selectedEventId === modelData.id ? theme.amber : theme.line)
                                     border.width: 1
+
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.bottom
+                                        height: 3
+                                        color: theme.danger
+                                        visible: underStaffed
+                                    }
 
                                     RowLayout {
                                         z: 1
@@ -361,6 +381,14 @@ Window {
                                                 color: theme.muted
                                                 font.pixelSize: 12
                                             }
+
+                                            Text {
+                                                text: "Назначено: " + assignedCount + "/3"
+                                                visible: underStaffed
+                                                color: theme.danger
+                                                font.bold: true
+                                                font.pixelSize: 11
+                                            }
                                         }
 
                                         AppButton {
@@ -387,6 +415,7 @@ Window {
                     AppPanel {
                         Layout.fillHeight: true
                         Layout.fillWidth: true
+                        visible: !manageWin.isGuest
                         title: "Команда на смену"
                         subtitle: manageWin.selectedEventId === -1 ? "Выберите мероприятие слева" : "Мероприятие ID: " + manageWin.selectedEventId
                         accent: manageWin.selectedEventId === -1 ? theme.danger : theme.leaf
@@ -459,6 +488,7 @@ Window {
                                     if (dbManager.assignWorker(manageWin.selectedEventId, workerCombo.currentValue, roleCombo.currentValue, parseFloat(payInput.text))) {
                                         notifyDialog.showMsg("Успех", "Работник добавлен.")
                                         payInput.text = ""
+                                        manageWin.refreshAll()
                                     } else {
                                         notifyDialog.showMsg("Ошибка", dbManager.lastError)
                                     }

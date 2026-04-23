@@ -291,7 +291,7 @@ QVariantList DatabaseManager::getScheduleEvents() {
     return list;
 }
 
-int DatabaseManager::getVenuePopularity(int venueId) {
+int DatabaseManager::getVenuePopularity(qint64 venueId) {
     QSqlQuery query;
     query.prepare("SELECT giraffic.get_venue_popularity(:id)");
     query.bindValue(":id", venueId);
@@ -491,18 +491,23 @@ QVariantList DatabaseManager::getEventsList(const QString &fromDate, const QStri
     QVariantList list;
 
     // Базовый запрос
-    QString sql = "SELECT event_id, title, to_char(starts_at, 'DD.MM.YYYY HH24:MI') as date_str FROM giraffic.events WHERE 1=1";
+    QString sql =
+        "SELECT e.event_id, e.title, to_char(e.starts_at, 'DD.MM.YYYY HH24:MI') as date_str, "
+        "COUNT(a.worker_id) as assigned_count "
+        "FROM giraffic.events e "
+        "LEFT JOIN giraffic.assignments a ON a.event_id = e.event_id "
+        "WHERE 1=1";
 
     // Если ввели дату "ОТ"
     if (!fromDate.isEmpty()) {
-        sql += " AND starts_at >= to_timestamp(:from, 'DD.MM.YYYY')";
+        sql += " AND e.starts_at >= to_timestamp(:from, 'DD.MM.YYYY')";
     }
     // Если ввели дату "ДО" (добавляем интервал, чтобы включить весь день до 23:59:59)
     if (!toDate.isEmpty()) {
-        sql += " AND starts_at <= to_timestamp(:to, 'DD.MM.YYYY') + interval '1 day - 1 second'";
+        sql += " AND e.starts_at <= to_timestamp(:to, 'DD.MM.YYYY') + interval '1 day - 1 second'";
     }
 
-    sql += " ORDER BY starts_at ASC";
+    sql += " GROUP BY e.event_id, e.title, e.starts_at ORDER BY e.starts_at ASC";
 
     QSqlQuery query;
     query.prepare(sql);
@@ -516,6 +521,7 @@ QVariantList DatabaseManager::getEventsList(const QString &fromDate, const QStri
             map["id"] = query.value("event_id").toLongLong();
             map["title"] = query.value("title").toString();
             map["date"] = query.value("date_str").toString();
+            map["assignedCount"] = query.value("assigned_count").toInt();
             list.append(map);
         }
     } else {

@@ -5,9 +5,11 @@ import QtQuick.Window
 Window {
     id: adminWin
 
-    width: 780
-    height: 620
-    title: "Админ Панель"
+    width: 920
+    height: 700
+    minimumWidth: 840
+    minimumHeight: 640
+    title: "Админ панель"
     flags: Qt.Window | Qt.FramelessWindowHint
     color: "transparent"
     modality: Qt.ApplicationModal
@@ -18,11 +20,25 @@ Window {
     property var owner: null
     property int currentTab: 0
     property int currentLogPage: 1
+    property int selectedRecordId: -1
     property var usersData: []
     property var rolesData: []
     property var recordsData: []
     property var auditData: []
-    property int selectedRecordId: -1
+    property var adminWorkersData: []
+    property var adminVenuesData: []
+    property var workerStatsData: []
+    property string statsResult: "Выберите параметры и нажмите нужную кнопку."
+
+    function selectedMonth() {
+        var month = parseInt(statsMonthField.text)
+        return isNaN(month) || month < 1 || month > 12 ? new Date().getMonth() + 1 : month
+    }
+
+    function selectedYear() {
+        var year = parseInt(statsYearField.text)
+        return isNaN(year) || year < 2000 ? new Date().getFullYear() : year
+    }
 
     function loadRecords() {
         recordsData = dbManager.getTableRecords(tableCombo.currentValue)
@@ -37,8 +53,47 @@ Window {
     function refreshAdminData() {
         usersData = dbManager.getAppUsersList()
         rolesData = dbManager.getAppRolesList()
+        adminWorkersData = dbManager.getWorkersList()
+        adminVenuesData = dbManager.getVenuesList()
         loadRecords()
         loadAudit()
+    }
+
+    function showCompanyEfficiency() {
+        var value = dbManager.getCompanyEfficiency(selectedMonth(), selectedYear())
+        statsResult = "KPI компании за " + selectedMonth() + "." + selectedYear() + ": " + value.toFixed(2) + "%"
+    }
+
+    function showVenuePopularity() {
+        if (venueStatsCombo.count === 0) {
+            statsResult = "Нет площадок для расчета."
+            return
+        }
+
+        var value = dbManager.getVenuePopularity(venueStatsCombo.currentValue)
+        statsResult = "Популярность площадки: " + value + " мероприятий."
+    }
+
+    function showWorkerBonus() {
+        if (workerStatsCombo.count === 0) {
+            statsResult = "Нет сотрудников для расчета."
+            return
+        }
+
+        var value = dbManager.getWorkerBonus(workerStatsCombo.currentValue, selectedMonth(), selectedYear())
+        statsResult = "Бонус сотрудника за " + selectedMonth() + "." + selectedYear() + ": " + value.toFixed(2) + " руб."
+    }
+
+    function showWorkerStats() {
+        if (workerStatsCombo.count === 0) {
+            statsResult = "Нет сотрудников для расчета."
+            workerStatsData = []
+            return
+        }
+
+        workerStatsData = dbManager.getWorkerStats(workerStatsCombo.currentValue)
+        statsResult = workerStatsData.length === 0 ? "По выбранному сотруднику пока нет назначений."
+                                                   : "Статистика сотрудника по месяцам загружена."
     }
 
     Component.onCompleted: refreshAdminData()
@@ -134,6 +189,13 @@ Window {
                         adminWin.currentTab = 2
                         adminWin.loadAudit()
                     }
+                }
+
+                AppButton {
+                    text: "Статистика"
+                    variant: adminWin.currentTab === 3 ? "danger" : "ghost"
+                    Layout.fillWidth: true
+                    onClicked: adminWin.currentTab = 3
                 }
             }
 
@@ -232,8 +294,7 @@ Window {
                                 width: recordsList.width
                                 height: 48
                                 radius: 8
-                                color: adminWin.selectedRecordId === modelData.value ? Qt.rgba(231 / 255, 91 / 255, 91 / 255, 0.18)
-                                                                                    : "#1d241f"
+                                color: adminWin.selectedRecordId === modelData.value ? Qt.rgba(231 / 255, 91 / 255, 91 / 255, 0.18) : "#1d241f"
                                 border.color: adminWin.selectedRecordId === modelData.value ? theme.danger : theme.line
 
                                 Text {
@@ -377,6 +438,139 @@ Window {
                                 onClicked: {
                                     adminWin.currentLogPage++
                                     adminWin.loadAudit()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                AppPanel {
+                    title: "Статистика"
+                    subtitle: "Безопасные запросы к функциям базы данных"
+                    accent: theme.amber
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 12
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            AppField {
+                                id: statsMonthField
+                                text: String(new Date().getMonth() + 1)
+                                placeholderText: "Месяц"
+                                validator: RegularExpressionValidator { regularExpression: /^([1-9]|1[0-2])$/ }
+                                Layout.preferredWidth: 92
+                            }
+
+                            AppField {
+                                id: statsYearField
+                                text: String(new Date().getFullYear())
+                                placeholderText: "Год"
+                                validator: RegularExpressionValidator { regularExpression: /^[0-9]{4}$/ }
+                                Layout.preferredWidth: 110
+                            }
+
+                            AppButton {
+                                text: "KPI компании"
+                                variant: "blue"
+                                Layout.fillWidth: true
+                                onClicked: adminWin.showCompanyEfficiency()
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            AppComboBox {
+                                id: venueStatsCombo
+                                Layout.fillWidth: true
+                                model: adminWin.adminVenuesData
+                                textRole: "text"
+                                valueRole: "value"
+                            }
+
+                            AppButton {
+                                text: "Популярность"
+                                variant: "ghost"
+                                Layout.preferredWidth: 150
+                                onClicked: adminWin.showVenuePopularity()
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            AppComboBox {
+                                id: workerStatsCombo
+                                Layout.fillWidth: true
+                                model: adminWin.adminWorkersData
+                                textRole: "text"
+                                valueRole: "value"
+                            }
+
+                            AppButton {
+                                text: "Бонус"
+                                variant: "green"
+                                Layout.preferredWidth: 110
+                                onClicked: adminWin.showWorkerBonus()
+                            }
+
+                            AppButton {
+                                text: "Месяцы"
+                                variant: "ghost"
+                                Layout.preferredWidth: 110
+                                onClicked: adminWin.showWorkerStats()
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 78
+                            radius: 8
+                            color: "#1d241f"
+                            border.color: theme.line
+
+                            Text {
+                                anchors.fill: parent
+                                anchors.margins: 14
+                                text: adminWin.statsResult
+                                color: theme.text
+                                font.pixelSize: 14
+                                wrapMode: Text.WordWrap
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
+
+                        ListView {
+                            id: workerStatsList
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+                            spacing: 8
+                            model: adminWin.workerStatsData
+
+                            delegate: Rectangle {
+                                width: workerStatsList.width
+                                height: 42
+                                radius: 8
+                                color: "#1d241f"
+                                border.color: theme.line
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.leftMargin: 14
+                                    anchors.rightMargin: 14
+                                    text: "Месяц " + modelData.month_num + ": " + modelData.work_count + " назначений"
+                                    color: theme.text
+                                    font.pixelSize: 13
+                                    elide: Text.ElideRight
                                 }
                             }
                         }

@@ -51,7 +51,7 @@ public:
 
     // --- ФУНКЦИИ (ВОЗВРАТ ЗНАЧЕНИЙ) ---
     Q_INVOKABLE double getCompanyEfficiency(int month, int year);
-    Q_INVOKABLE int getVenuePopularity(int venueId);
+    Q_INVOKABLE int getVenuePopularity(qint64 venueId);
     Q_INVOKABLE double getWorkerBonus(qint64 workerId, int month, int year);
     Q_INVOKABLE QVariantList getWorkerStats(qint64 workerId);
     Q_INVOKABLE bool assignWorker(qint64 eventId, qint64 workerId, qint64 roleId, double payAmount);
