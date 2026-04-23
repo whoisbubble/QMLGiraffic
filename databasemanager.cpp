@@ -4,6 +4,7 @@
 #include <QCryptographicHash>
 #include <QGuiApplication>
 #include <QSettings>
+#include <QStringList>
 
 namespace {
 struct DatabaseConfig
@@ -119,6 +120,12 @@ bool DatabaseManager::connectToDatabase(const QString &user, const QString &pass
     const DatabaseConfig config = loadDatabaseConfig();
     const QString dbUser = user.isEmpty() ? config.guestUser : user;
     const QString dbPassword = password.isEmpty() ? config.guestPassword : password;
+
+    if (!QSqlDatabase::drivers().contains("QPSQL")) {
+        setLastError("PostgreSQL Qt driver QPSQL is not loaded. Check sqldrivers/qsqlpsql.dll and libpq.dll near appQMLGiraffic.exe.");
+        emit connectionChanged(m_isConnected);
+        return false;
+    }
 
     db = QSqlDatabase::addDatabase("QPSQL");
     db.setHostName(config.host);
