@@ -4,7 +4,7 @@
 
 - как настраивается база
 - как работает локальный деплой
-- как собирать Windows, macOS и Linux через GitHub Actions
+- как собирать macOS и Linux через GitHub Actions
 - куда класть `giraffic.ini`
 - что ожидать от каждой платформы
 
@@ -162,11 +162,18 @@ chmod +x scripts/deploy-macos.sh
 ./scripts/deploy-macos.sh build/Release/Giraffic.app .
 ```
 
-Либо напрямую:
+Если нужно пересобрать `assets/app_icon.icns` из PNG, сначала выполни:
 
 ```bash
-macdeployqt build/Release/Giraffic.app -qmldir=. -dmg
+chmod +x scripts/generate-macos-icon.sh
+./scripts/generate-macos-icon.sh assets/app_icon.png assets/app_icon.icns
 ```
+
+После этого используй `scripts/deploy-macos.sh`: он соберёт `.dmg`, в котором будут:
+
+- `Giraffic.app`
+- ярлык `Applications` для drag-and-drop установки
+- `giraffic.ini.example`
 
 ### 4.3. Как пользователю настроить конфиг на Mac
 
@@ -247,7 +254,6 @@ Workflow:
 
 Он собирает:
 
-- Windows на `windows-2022`
 - macOS на `macos-15-intel`
 - Linux на `ubuntu-22.04`
 
@@ -260,22 +266,10 @@ Workflow:
 5. Нажми `Run workflow`.
 6. Дождись завершения сборок.
 7. Скачай артефакты:
-   - `giraffic-windows`
    - `giraffic-macos`
    - `giraffic-linux`
 
 ## 8. Что лежит в артефактах
-
-### Windows artifact
-
-Обычно там:
-
-- `Giraffic.exe`
-- Qt DLL
-- `qsqlpsql.dll`
-- `libpq.dll`
-- дополнительные PostgreSQL DLL
-- `giraffic.ini.example`
 
 ### macOS artifact
 

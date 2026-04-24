@@ -8,53 +8,15 @@ on:
       - master
 
 jobs:
-  build-windows:
-    runs-on: windows-2022
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install Qt 6.5.3
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: "6.5.3"
-          host: "windows"
-          target: "desktop"
-          arch: "win64_msvc2022_64"
-          cache: true
-
-      - name: Install PostgreSQL client
-        shell: powershell
-        run: choco install postgresql --params '/Password:postgres' -y
-
-      - name: Configure CMake
-        shell: powershell
-        run: cmake -S . -B build-windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
-
-      - name: Build app
-        shell: powershell
-        run: cmake --build build-windows --config Release --target appQMLGiraffic
-
-      - name: Prepare deploy folder
-        shell: powershell
-        run: .\scripts\deploy-windows.ps1 -BuildDir "build-windows" -DeployDir "dist/windows" -QtDir "$env:QT_ROOT_DIR"
-
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: giraffic-windows
-          path: dist/windows
-
   build-macos:
     runs-on: macos-15-intel
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Regenerate macOS icon
+        run: bash scripts/generate-macos-icon.sh assets/app_icon.png assets/app_icon.icns
 
       - name: Install Qt 6.5.3
         uses: jurplel/install-qt-action@v4

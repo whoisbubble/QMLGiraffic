@@ -32,7 +32,7 @@ Giraffic — это desktop-приложение на Qt/QML для состав
 - `databasemanager.cpp/.h` — подключение к БД и SQL-логика
 - `config/giraffic.ini.example` — пример конфига базы
 - `scripts/` — локальные скрипты деплоя
-- `.github/workflows/desktop-builds.yml` — GitHub Actions для Windows, macOS и Linux
+- `.github/workflows/desktop-builds.yml` — GitHub Actions для macOS и Linux
 
 ## Быстрый старт для разработки
 
@@ -112,7 +112,6 @@ Giraffic.app/Contents/MacOS/giraffic.ini
 
 Автоматическая сборка через GitHub Actions:
 
-- Windows artifact
 - macOS artifact
 - Linux artifact
 
@@ -133,9 +132,14 @@ Workflow:
 5. Нажми `Run workflow`.
 6. Дождись окончания сборки.
 7. Скачай артефакты:
-   - `giraffic-windows`
    - `giraffic-macos`
    - `giraffic-linux`
+
+Если нужно пересобрать macOS-иконку из `assets/app_icon.png`, выполни:
+
+```bash
+bash scripts/generate-macos-icon.sh assets/app_icon.png assets/app_icon.icns
+```
 
 ## Имя приложения и метаданные
 
