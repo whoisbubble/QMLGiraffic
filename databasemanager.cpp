@@ -142,7 +142,7 @@ bool DatabaseManager::connectToDatabase(const QString &user, const QString &pass
     const QString dbPassword = password.isEmpty() ? config.guestPassword : password;
 
     if (!QSqlDatabase::drivers().contains("QPSQL")) {
-        setLastError("PostgreSQL Qt driver QPSQL is not loaded. Check sqldrivers/qsqlpsql.dll and libpq.dll near appQMLGiraffic.exe.");
+        setLastError("PostgreSQL Qt driver QPSQL is not loaded. Check that the QPSQL plugin is deployed with the app and that libpq is bundled correctly.");
         emit connectionChanged(m_isConnected);
         return false;
     }

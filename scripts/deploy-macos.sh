@@ -9,6 +9,96 @@ APP_NAME="$(basename "$APP_PATH" .app)"
 APP_DIR="$(cd "$(dirname "$APP_PATH")" && pwd)"
 DMG_ROOT="$APP_DIR/${APP_NAME}-dmg"
 DMG_PATH="$APP_DIR/${APP_NAME}.dmg"
+CONTENTS_DIR="$APP_PATH/Contents"
+MACOS_DIR="$CONTENTS_DIR/MacOS"
+FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+PLUGINS_DIR="$CONTENTS_DIR/PlugIns"
+SQLDRIVERS_DIR="$PLUGINS_DIR/sqldrivers"
+
+rewrite_dependency() {
+    local target_file="$1"
+    local old_path="$2"
+    local base_name
+    base_name="$(basename "$old_path")"
+    local new_path
+
+    case "$target_file" in
+        "$SQLDRIVERS_DIR"/*)
+            new_path="@loader_path/../../Frameworks/$base_name"
+            ;;
+        "$FRAMEWORKS_DIR"/*)
+            new_path="@loader_path/$base_name"
+            ;;
+        "$MACOS_DIR"/*)
+            new_path="@executable_path/../Frameworks/$base_name"
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+
+    install_name_tool -change "$old_path" "$new_path" "$target_file" 2>/dev/null || true
+}
+
+bundle_non_system_dependencies() {
+    local target_file="$1"
+    local dep
+
+    while IFS= read -r dep; do
+        [ -z "$dep" ] && continue
+
+        case "$dep" in
+            /System/*|/usr/lib/*|@executable_path/*|@loader_path/*|@rpath/*)
+                continue
+                ;;
+        esac
+
+        case "$dep" in
+            *.framework/*)
+                continue
+                ;;
+        esac
+
+        local dep_name
+        dep_name="$(basename "$dep")"
+        local bundled_dep="$FRAMEWORKS_DIR/$dep_name"
+
+        if [ ! -f "$bundled_dep" ]; then
+            cp -fL "$dep" "$bundled_dep"
+            chmod 644 "$bundled_dep"
+            install_name_tool -id "@rpath/$dep_name" "$bundled_dep" 2>/dev/null || true
+            bundle_non_system_dependencies "$bundled_dep"
+        fi
+
+        rewrite_dependency "$target_file" "$dep"
+    done < <(otool -L "$target_file" | tail -n +2 | awk '{print $1}')
+}
+
+find_qt_psql_plugin() {
+    local candidates=()
+
+    if command -v qtpaths >/dev/null 2>&1; then
+        candidates+=("$(qtpaths --plugin-dir 2>/dev/null)/sqldrivers/libqsqlpsql.dylib")
+    fi
+
+    if command -v qmake >/dev/null 2>&1; then
+        candidates+=("$(qmake -query QT_INSTALL_PLUGINS 2>/dev/null)/sqldrivers/libqsqlpsql.dylib")
+    fi
+
+    if [ -n "${QT_ROOT_DIR:-}" ]; then
+        candidates+=("$QT_ROOT_DIR/plugins/sqldrivers/libqsqlpsql.dylib")
+    fi
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
 
 if ! command -v macdeployqt >/dev/null 2>&1; then
     echo "macdeployqt is not in PATH. Add your Qt bin directory to PATH first."
@@ -27,6 +117,18 @@ if ! command -v hdiutil >/dev/null 2>&1; then
 fi
 
 macdeployqt "$APP_PATH" -qmldir="$QML_DIR"
+
+mkdir -p "$FRAMEWORKS_DIR" "$SQLDRIVERS_DIR"
+
+QT_PSQL_PLUGIN="$(find_qt_psql_plugin || true)"
+if [ -z "$QT_PSQL_PLUGIN" ]; then
+    echo "Qt PostgreSQL plugin libqsqlpsql.dylib not found. QPSQL deployment cannot continue."
+    exit 1
+fi
+
+cp -fL "$QT_PSQL_PLUGIN" "$SQLDRIVERS_DIR/libqsqlpsql.dylib"
+chmod 755 "$SQLDRIVERS_DIR/libqsqlpsql.dylib"
+bundle_non_system_dependencies "$SQLDRIVERS_DIR/libqsqlpsql.dylib"
 
 rm -rf "$DMG_ROOT"
 rm -f "$DMG_PATH"
