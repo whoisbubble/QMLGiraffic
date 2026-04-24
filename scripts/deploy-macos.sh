@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_PATH="${1:-build/Release/appQMLGiraffic.app}"
+APP_PATH="${1:-build/Release/Giraffic.app}"
 QML_DIR="${2:-.}"
 
 if ! command -v macdeployqt >/dev/null 2>&1; then

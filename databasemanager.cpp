@@ -2,9 +2,12 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDir>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QSettings>
 #include <QStringList>
+#include <QStandardPaths>
 
 namespace {
 struct DatabaseConfig
@@ -47,7 +50,24 @@ int readIntSetting(QSettings &settings, const char *envName, const char *setting
 
 DatabaseConfig loadDatabaseConfig()
 {
-    const QString configPath = QCoreApplication::applicationDirPath() + "/giraffic.ini";
+    QString configPath = qEnvironmentVariable("GIRAFFIC_CONFIG_PATH");
+    if (configPath.isEmpty()) {
+        const QString appConfigDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+        const QString appConfigPath = appConfigDir + "/giraffic.ini";
+        const QString bundlePath = QCoreApplication::applicationDirPath() + "/giraffic.ini";
+        const QString cwdPath = QDir::currentPath() + "/giraffic.ini";
+
+        if (QFileInfo::exists(appConfigPath)) {
+            configPath = appConfigPath;
+        } else if (QFileInfo::exists(bundlePath)) {
+            configPath = bundlePath;
+        } else if (QFileInfo::exists(cwdPath)) {
+            configPath = cwdPath;
+        } else {
+            configPath = bundlePath;
+        }
+    }
+
     QSettings settings(configPath, QSettings::IniFormat);
 
     return {

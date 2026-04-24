@@ -8,9 +8,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
-$exePath = Join-Path $root "$BuildDir/appQMLGiraffic.exe"
+$appName = "Giraffic"
+$exePath = Join-Path $root "$BuildDir/$appName.exe"
 $deployPath = Join-Path $root $DeployDir
-$deployExe = Join-Path $deployPath "appQMLGiraffic.exe"
+$deployExe = Join-Path $deployPath "$appName.exe"
 $windeployqt = Join-Path $QtDir "bin/windeployqt.exe"
 $qtPsqlDriver = Join-Path $QtDir "plugins/sqldrivers/qsqlpsql.dll"
 

@@ -1,0 +1,158 @@
+name: Desktop Builds
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt 6.5.3
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.5.3"
+          host: "windows"
+          target: "desktop"
+          arch: "win64_msvc2022_64"
+          cache: true
+
+      - name: Install PostgreSQL client
+        shell: powershell
+        run: choco install postgresql --params '/Password:postgres' -y
+
+      - name: Configure CMake
+        shell: powershell
+        run: cmake -S . -B build-windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+
+      - name: Build app
+        shell: powershell
+        run: cmake --build build-windows --config Release --target appQMLGiraffic
+
+      - name: Prepare deploy folder
+        shell: powershell
+        run: .\scripts\deploy-windows.ps1 -BuildDir "build-windows" -DeployDir "dist/windows" -QtDir "$env:QT_ROOT_DIR"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: giraffic-windows
+          path: dist/windows
+
+  build-macos:
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.5.3
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.5.3"
+          host: "mac"
+          target: "desktop"
+          arch: "clang_64"
+          cache: true
+
+      - name: Install PostgreSQL client libraries
+        run: brew install libpq
+
+      - name: Configure CMake
+        run: cmake -S . -B build-macos -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build app
+        run: cmake --build build-macos --config Release --target appQMLGiraffic
+
+      - name: Put example config into app bundle
+        run: cp config/giraffic.ini.example build-macos/Giraffic.app/Contents/MacOS/giraffic.ini.example
+
+      - name: Run macdeployqt
+        run: |
+          export PATH="$QT_ROOT_DIR/bin:$PATH"
+          bash scripts/deploy-macos.sh build-macos/Giraffic.app .
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: giraffic-macos
+          path: |
+            build-macos/Giraffic.app
+            build-macos/Giraffic.dmg
+            config/giraffic.ini.example
+
+  build-linux:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.5.3
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.5.3"
+          host: "linux"
+          target: "desktop"
+          arch: "gcc_64"
+          cache: true
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev libpq5 patchelf
+
+      - name: Configure CMake
+        run: cmake -S . -B build-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+
+      - name: Build app
+        run: cmake --build build-linux --config Release --target appQMLGiraffic
+
+      - name: Prepare Linux AppDir
+        run: bash scripts/deploy-linux.sh build-linux dist/linux/AppDir
+
+      - name: Add PostgreSQL Qt plugin and client libs
+        run: |
+          mkdir -p dist/linux/AppDir/usr/plugins/sqldrivers
+          mkdir -p dist/linux/AppDir/usr/lib
+          cp "$QT_ROOT_DIR/plugins/sqldrivers/libqsqlpsql.so" dist/linux/AppDir/usr/plugins/sqldrivers/ || true
+          cp /usr/lib/x86_64-linux-gnu/libpq.so* dist/linux/AppDir/usr/lib/ || true
+          cp /usr/lib/x86_64-linux-gnu/libssl.so* dist/linux/AppDir/usr/lib/ || true
+          cp /usr/lib/x86_64-linux-gnu/libcrypto.so* dist/linux/AppDir/usr/lib/ || true
+
+      - name: Download linuxdeploy tools
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+
+      - name: Build AppImage
+        run: |
+          export QML_SOURCES_PATHS="$GITHUB_WORKSPACE"
+          export EXTRA_QT_PLUGINS="sqldrivers/libqsqlpsql.so"
+          export PATH="$PWD:$PATH"
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir dist/linux/AppDir \
+            -e dist/linux/AppDir/usr/bin/Giraffic \
+            -d dist/linux/AppDir/usr/share/applications/Giraffic.desktop \
+            -i dist/linux/AppDir/usr/share/icons/hicolor/256x256/apps/Giraffic.png \
+            --plugin qt \
+            --output appimage
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: giraffic-linux
+          path: |
+            dist/linux/AppDir
+            ./*.AppImage

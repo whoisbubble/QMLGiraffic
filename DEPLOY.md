@@ -1,87 +1,23 @@
-# Giraffic: деплой и настройки
+# Giraffic: деплой и использование
 
-Это Qt/QML приложение с PostgreSQL. Само приложение деплоится через Qt Deploy Tools, а база должна быть либо локально установлена у пользователя, либо доступна на сервере.
+Этот файл объясняет:
 
-## 1. Где редактировать переменные окружения
+- как настраивается база
+- как работает локальный деплой
+- как собирать Windows, macOS и Linux через GitHub Actions
+- куда класть `giraffic.ini`
+- что ожидать от каждой платформы
 
-В приложении поддерживаются такие переменные:
+## 1. Как работает конфиг
 
-```text
-GIRAFFIC_DB_HOST
-GIRAFFIC_DB_PORT
-GIRAFFIC_DB_NAME
-GIRAFFIC_DB_GUEST_USER
-GIRAFFIC_DB_GUEST_PASSWORD
-GIRAFFIC_DB_ADMIN_USER
-GIRAFFIC_DB_ADMIN_PASSWORD
-GIRAFFIC_DB_MANAGER_USER
-GIRAFFIC_DB_MANAGER_PASSWORD
-```
+Приложение читает настройки базы в таком порядке:
 
-Но для деплоя удобнее не переменные окружения, а файл `giraffic.ini`, который лежит рядом с `.exe` или внутри `.app`. Переменные окружения хороши для разработки, а `giraffic.ini` проще отдать другому человеку вместе с приложением.
+1. `GIRAFFIC_CONFIG_PATH`
+2. системная папка конфигов приложения
+3. `giraffic.ini` рядом с исполняемым файлом
+4. текущая рабочая папка
 
-### Windows: временно, только для текущей консоли
-
-```powershell
-$env:GIRAFFIC_DB_HOST = "localhost"
-$env:GIRAFFIC_DB_PORT = "5432"
-$env:GIRAFFIC_DB_NAME = "giraffic_db"
-$env:GIRAFFIC_DB_GUEST_USER = "giraffic_guest"
-$env:GIRAFFIC_DB_GUEST_PASSWORD = "guest_password"
-```
-
-После закрытия PowerShell эти значения исчезнут.
-
-### Windows: постоянно для текущего пользователя
-
-```powershell
-[Environment]::SetEnvironmentVariable("GIRAFFIC_DB_HOST", "localhost", "User")
-[Environment]::SetEnvironmentVariable("GIRAFFIC_DB_PORT", "5432", "User")
-[Environment]::SetEnvironmentVariable("GIRAFFIC_DB_NAME", "giraffic_db", "User")
-[Environment]::SetEnvironmentVariable("GIRAFFIC_DB_GUEST_USER", "giraffic_guest", "User")
-[Environment]::SetEnvironmentVariable("GIRAFFIC_DB_GUEST_PASSWORD", "guest_password", "User")
-```
-
-После этого надо закрыть и заново открыть Qt Creator/PowerShell/приложение.
-
-### Windows: через интерфейс
-
-1. Открой `Пуск`.
-2. Найди `Изменение системных переменных среды`.
-3. Нажми `Переменные среды`.
-4. В блоке `Переменные пользователя` нажми `Создать`.
-5. Введи имя, например `GIRAFFIC_DB_HOST`.
-6. Введи значение, например `localhost`.
-7. Повтори для остальных переменных.
-8. Перезапусти приложение.
-
-### macOS/Linux: временно из терминала
-
-```bash
-export GIRAFFIC_DB_HOST="localhost"
-export GIRAFFIC_DB_PORT="5432"
-export GIRAFFIC_DB_NAME="giraffic_db"
-export GIRAFFIC_DB_GUEST_USER="giraffic_guest"
-export GIRAFFIC_DB_GUEST_PASSWORD="guest_password"
-```
-
-Если запускать `.app` двойным кликом на macOS, переменные из терминала обычно не применяются. Для macOS-деплоя лучше использовать `giraffic.ini`.
-
-## 2. Рекомендуемый способ: giraffic.ini
-
-Файл-пример уже есть:
-
-```text
-config/giraffic.ini.example
-```
-
-Скопируй его рядом с приложением и переименуй в:
-
-```text
-giraffic.ini
-```
-
-Пример:
+Формат конфига:
 
 ```ini
 [database]
@@ -99,47 +35,341 @@ manager_user=giraffic_manager
 manager_password=manager
 ```
 
-Важно: `giraffic.ini` с реальными паролями не надо коммитить на GitHub. В репозиторий кладём только `giraffic.ini.example`.
+Файл-пример:
 
-## 3. Что делать с базой у других людей
+```text
+config/giraffic.ini.example
+```
 
-Сейчас приложение использует PostgreSQL и SQL-объекты проекта:
+## 2. Куда класть `giraffic.ini`
 
-- схему `giraffic`;
-- таблицы;
-- views;
-- хранимые процедуры;
-- роли БД `giraffic_guest`, `giraffic_admin`, `giraffic_manager`.
+### Windows
 
-Поэтому у пользователя есть два нормальных варианта.
+Рекомендуемый вариант:
 
-### Вариант A: у каждого своя локальная база
+```text
+dist/windows/giraffic.ini
+```
+
+Либо можно явно указать путь:
+
+```powershell
+$env:GIRAFFIC_CONFIG_PATH = "C:\path\to\giraffic.ini"
+```
+
+### macOS
+
+Лучший вариант:
+
+```text
+~/Library/Application Support/Giraffic/giraffic.ini
+```
+
+Быстрый тестовый вариант:
+
+```text
+Giraffic.app/Contents/MacOS/giraffic.ini
+```
+
+### Linux
+
+Лучший вариант:
+
+```text
+~/.config/Giraffic/giraffic.ini
+```
+
+Либо так:
+
+```bash
+export GIRAFFIC_CONFIG_PATH="/path/to/giraffic.ini"
+```
+
+## 3. Локальный деплой на Windows
+
+### 3.1. Сборка
+
+Собери проект в `Release`.
+
+На выходе должен получиться файл:
+
+```text
+build/.../Giraffic.exe
+```
+
+### 3.2. Деплой
+
+Запуск:
+
+```powershell
+.\scripts\deploy-windows.ps1
+```
+
+Если нужно указать пути явно:
+
+```powershell
+.\scripts\deploy-windows.ps1 `
+  -BuildDir "build/Desktop_Qt_6_10_2_MinGW_64_bit-u041eu0442u043bu0430u0434u043au0430" `
+  -DeployDir "dist/windows" `
+  -QtDir "C:/Qt/6.10.2/mingw_64"
+```
+
+Если PostgreSQL установлен не в стандартном месте:
+
+```powershell
+.\scripts\deploy-windows.ps1 -PostgresBin "C:\Program Files\PostgreSQL\18\bin"
+```
+
+### 3.3. Что получится
+
+Примерно такая структура:
+
+```text
+dist/windows/
+  Giraffic.exe
+  giraffic.ini.example
+  Qt*.dll
+  libpq.dll
+  sqldrivers/
+  qml/
+  platforms/
+```
+
+### 3.4. Что передавать пользователю
+
+Нужно передавать **всю папку** `dist/windows`, а не только `.exe`.
+
+## 4. Локальный деплой на macOS
+
+Важно: нормальный `.app` нужно собирать именно на macOS.
+
+### 4.1. Сборка
+
+Собери проект в `Release`.
+
+На выходе должен появиться:
+
+```text
+build/.../Giraffic.app
+```
+
+### 4.2. Деплой
+
+Через скрипт:
+
+```bash
+chmod +x scripts/deploy-macos.sh
+./scripts/deploy-macos.sh build/Release/Giraffic.app .
+```
+
+Либо напрямую:
+
+```bash
+macdeployqt build/Release/Giraffic.app -qmldir=. -dmg
+```
+
+### 4.3. Как пользователю настроить конфиг на Mac
+
+Нормальный путь такой:
+
+1. установить `Giraffic.app` в `/Applications`
+2. создать папку:
+
+```bash
+mkdir -p ~/Library/Application\ Support/Giraffic
+```
+
+3. скопировать конфиг:
+
+```bash
+cp config/giraffic.ini.example ~/Library/Application\ Support/Giraffic/giraffic.ini
+```
+
+4. открыть `giraffic.ini` и вписать реальные параметры базы
+
+### 4.4. Ограничения по старым Mac
+
+Сейчас в проекте:
+
+- GitHub Actions для macOS идут на `macos-15-intel`
+- target выставлен на `macOS 11.0`
+- используется Qt `6.5.3`
+
+Это заметно лучше для старых Intel Mac, чем сборка под новый arm runner. Но если нужен запуск на очень старой macOS ниже `11`, то, скорее всего, придётся делать отдельную ветку на Qt 5.15.
+
+## 5. Локальный деплой на Linux
+
+### 5.1. Сборка
+
+Собери проект в `Release`.
+
+Ожидаемый бинарник:
+
+```text
+build-linux/Giraffic
+```
+
+### 5.2. Подготовка AppDir
+
+Запуск:
+
+```bash
+chmod +x scripts/deploy-linux.sh
+./scripts/deploy-linux.sh build-linux dist/linux/AppDir
+```
+
+Это создаст:
+
+```text
+dist/linux/AppDir
+```
+
+### 5.3. Упаковка
+
+В GitHub Actions Linux-сборка пытается дополнительно собрать `AppImage` через `linuxdeploy`.
+
+Linux — самая капризная платформа для деплоя из-за:
+
+- различий между дистрибутивами
+- версий OpenSSL
+- совместимости `libpq`
+- путей загрузки Qt plugins
+
+Поэтому Linux-артефакт обязательно нужно проверять на реальной машине.
+
+## 6. GitHub Actions
+
+Workflow:
+
+```text
+.github/workflows/desktop-builds.yml
+```
+
+Он собирает:
+
+- Windows на `windows-2022`
+- macOS на `macos-15-intel`
+- Linux на `ubuntu-22.04`
+
+## 7. Как запускать GitHub Actions
+
+1. Запушь проект на GitHub.
+2. Открой репозиторий.
+3. Перейди во вкладку `Actions`.
+4. Выбери `Desktop Builds`.
+5. Нажми `Run workflow`.
+6. Дождись завершения сборок.
+7. Скачай артефакты:
+   - `giraffic-windows`
+   - `giraffic-macos`
+   - `giraffic-linux`
+
+## 8. Что лежит в артефактах
+
+### Windows artifact
+
+Обычно там:
+
+- `Giraffic.exe`
+- Qt DLL
+- `qsqlpsql.dll`
+- `libpq.dll`
+- дополнительные PostgreSQL DLL
+- `giraffic.ini.example`
+
+### macOS artifact
+
+Обычно там:
+
+- `Giraffic.app`
+- `Giraffic.dmg`
+- `giraffic.ini.example`
+
+### Linux artifact
+
+Обычно там:
+
+- `AppDir`
+- `.AppImage`
+
+## 9. Имя приложения и свойства файла
+
+Настраиваются в:
+
+```text
+CMakeLists.txt
+cmake/windows_version.rc.in
+cmake/Info.plist.in
+```
+
+Основные поля:
+
+- имя приложения
+- имя исполняемого файла
+- описание
+- компания
+- copyright
+- bundle identifier
+
+Это влияет на:
+
+- свойства файла на Windows
+- имя `.app` на macOS
+- имя бинарника
+- пользовательское отображение приложения
+
+## 10. Что нужно для PostgreSQL
+
+Приложение использует `QPSQL`.
+
+Значит, в деплое нужны:
+
+- Qt SQL module
+- Qt plugin PostgreSQL
+- `libpq`
+- связанные crypto/runtime библиотеки для нужной ОС
+
+Типичная ошибка:
+
+```text
+Driver not loaded
+```
+
+Обычно это значит:
+
+- не найден `qsqlpsql.dll` или `libqsqlpsql.so`
+- не найден `libpq`
+- не хватает OpenSSL-зависимостей
+
+Обычно это **не** значит, что сломан `.ini`.
+
+## 11. Как дать приложение другим людям
+
+Есть два нормальных сценария.
+
+### Вариант A: локальная база у каждого
 
 Подходит для курсовой и демонстрации.
 
 На каждом компьютере:
 
-1. Установить PostgreSQL.
-2. Создать базу `giraffic_db`.
-3. Накатить SQL-дамп твоей схемы.
-4. Создать роли и пароли, которые указаны в `giraffic.ini`.
-5. Запустить приложение.
-
-В `giraffic.ini` тогда будет:
-
-```ini
-host=localhost
-port=5432
-name=giraffic_db
-```
+1. установить PostgreSQL
+2. создать `giraffic_db`
+3. импортировать твою схему и данные
+4. создать роли БД
+5. заполнить локальный `giraffic.ini`
 
 ### Вариант B: одна общая база на сервере
 
-Подходит, если несколько людей должны работать с одними данными.
+Подходит, если несколько людей работают с одними и теми же данными.
 
-1. PostgreSQL стоит на сервере.
-2. В PostgreSQL разрешены внешние подключения.
-3. В `giraffic.ini` у пользователей указан IP или домен сервера:
+Пользователи:
+
+1. получают приложение
+2. получают `giraffic.ini`
+3. подключаются к одному PostgreSQL серверу
+
+Пример:
 
 ```ini
 host=192.168.1.50
@@ -147,184 +377,62 @@ port=5432
 name=giraffic_db
 ```
 
-Минус: надо настраивать безопасность, firewall, пароли, доступы и резервные копии.
+## 12. Права гостя
 
-## 4. Деплой на Windows
+Если гость должен только смотреть мероприятия, можно выдать read-only права.
 
-### 4.1. Собрать Release
+Пример:
 
-В Qt Creator:
+```sql
+GRANT USAGE ON SCHEMA giraffic TO giraffic_guest;
 
-1. Открой проект.
-2. Слева выбери `Projects`.
-3. Выбери Desktop Qt MinGW kit.
-4. Переключи сборку на `Release`.
-5. Нажми `Build`.
-
-После сборки должен появиться файл:
-
-```text
-build/.../appQMLGiraffic.exe
+GRANT SELECT ON TABLE
+    giraffic.events,
+    giraffic.assignments,
+    giraffic.workers,
+    giraffic.roles,
+    giraffic.clients,
+    giraffic.venues
+TO giraffic_guest;
 ```
 
-### 4.2. Собрать папку для передачи пользователю
+Гостю не надо выдавать:
 
-В PowerShell из корня проекта:
+- `INSERT`
+- `UPDATE`
+- `DELETE`
 
-```powershell
-.\scripts\deploy-windows.ps1
-```
+## 13. Что коммитить, а что нет
 
-Скрипт:
+Можно коммитить:
 
-- создаст папку `dist/windows`;
-- скопирует туда `appQMLGiraffic.exe`;
-- запустит `windeployqt`;
-- положит рядом `giraffic.ini.example`.
+- исходники
+- `CMakeLists.txt`
+- `assets/app_icon.*`
+- `config/giraffic.ini.example`
+- `scripts/`
+- `.github/workflows/`
+- `README.md`
+- `DEPLOY.md`
 
-Если build-папка называется иначе, передай путь явно:
+Не надо коммитить:
 
-```powershell
-.\scripts\deploy-windows.ps1 -BuildDir "build/Desktop_Qt_6_10_2_MinGW_64_bit-u041eu0442u043bu0430u0434u043au0430" -DeployDir "dist/windows"
-```
+- реальный `giraffic.ini`
+- пароли
+- `build/`
+- `dist/`
+- локальные IDE-настройки
 
-### 4.3. Добавить настройки базы
+## 14. Практический совет
 
-В папке `dist/windows`:
+Для курсовой самый удобный и аккуратный путь такой:
 
-1. Скопируй `giraffic.ini.example`.
-2. Переименуй копию в `giraffic.ini`.
-3. Проверь host/port/name/users/passwords.
+1. в Git хранить только `giraffic.ini.example`
+2. собирать артефакты через GitHub Actions
+3. один раз тестировать каждый артефакт на реальной машине
+4. пользователю отдавать:
+   - готовый артефакт
+   - короткую инструкцию, куда положить `giraffic.ini`
+   - пример конфига
 
-Структура папки должна быть примерно такая:
-
-```text
-dist/windows/
-  appQMLGiraffic.exe
-  giraffic.ini
-  Qt6Core.dll
-  Qt6Gui.dll
-  Qt6Qml.dll
-  Qt6Quick.dll
-  sqldrivers/
-  qml/
-  platforms/
-```
-
-### 4.4. Проверить PostgreSQL-драйвер
-
-Так как приложение использует `QPSQL`, в папке деплоя должен быть драйвер:
-
-```text
-dist/windows/sqldrivers/qsqlpsql.dll
-```
-
-Если приложение на чужом ПК пишет, что драйвер PostgreSQL не загружен, проверь наличие:
-
-- `sqldrivers/qsqlpsql.dll`;
-- `libpq.dll`;
-- зависимостей `libpq.dll`, например `libssl*.dll`, `libcrypto*.dll`, `libintl*.dll`, `libiconv*.dll`, если они нужны твоей сборке PostgreSQL/Qt.
-
-Часто проще поставить PostgreSQL на компьютер пользователя и добавить его `bin` в `PATH`, но для красивого деплоя лучше копировать нужные DLL рядом с `.exe`.
-
-### 4.5. Передать пользователю
-
-Передавать надо всю папку `dist/windows`, а не только `.exe`.
-
-Пользователь запускает:
-
-```text
-appQMLGiraffic.exe
-```
-
-## 5. Деплой на macOS
-
-Важно: macOS-приложение надо собирать на macOS. С Windows нормальный `.app` для Mac не собрать.
-
-### 5.1. Собрать Release на Mac
-
-1. Установи Qt для macOS.
-2. Открой проект в Qt Creator на Mac.
-3. Выбери Release.
-4. Собери проект.
-
-На выходе будет:
-
-```text
-appQMLGiraffic.app
-```
-
-### 5.2. Запустить macdeployqt
-
-В терминале на Mac:
-
-```bash
-macdeployqt path/to/appQMLGiraffic.app -qmldir=. -dmg
-```
-
-Или через скрипт:
-
-```bash
-chmod +x scripts/deploy-macos.sh
-./scripts/deploy-macos.sh path/to/appQMLGiraffic.app .
-```
-
-Скрипт создаст `.dmg`, который можно передать пользователю.
-
-### 5.3. Куда положить giraffic.ini на macOS
-
-Самый простой вариант для теста: положить `giraffic.ini` рядом с исполняемым файлом внутри bundle:
-
-```text
-appQMLGiraffic.app/Contents/MacOS/giraffic.ini
-```
-
-То есть:
-
-```bash
-cp config/giraffic.ini.example appQMLGiraffic.app/Contents/MacOS/giraffic.ini
-```
-
-Потом открыть файл и поменять параметры базы.
-
-### 5.4. PostgreSQL на Mac
-
-Если у пользователя своя локальная база:
-
-1. Установить PostgreSQL.
-2. Создать `giraffic_db`.
-3. Накатить SQL-дамп.
-4. Проверить роли и пароли.
-5. Запустить `.app`.
-
-## 6. Иконка приложения
-
-Иконка уже подключена:
-
-- `assets/app_icon.png` используется приложением во время запуска.
-- `assets/app_icon.ico` вшивается в Windows `.exe` через `app_icon.rc`.
-- `assets/app_icon.icns` попадает в macOS `.app`.
-
-Чтобы заменить иконку:
-
-1. Подготовь новые файлы с такими же именами.
-2. Положи их в папку `assets`.
-3. Пересобери проект.
-
-## 7. GitHub
-
-В репозиторий надо класть:
-
-- исходники `.cpp/.h/.qml`;
-- `CMakeLists.txt`;
-- `assets/app_icon.*`;
-- `config/giraffic.ini.example`;
-- `scripts/`;
-- `DEPLOY.md`.
-
-Не надо класть:
-
-- `build/`;
-- `dist/`;
-- реальный `giraffic.ini` с паролями;
-- локальные настройки Qt Creator.
+Это самый понятный, аккуратный и достаточно профессиональный вариант для твоего проекта.
