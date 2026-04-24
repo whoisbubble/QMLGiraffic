@@ -14,6 +14,36 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 PLUGINS_DIR="$CONTENTS_DIR/PlugIns"
 SQLDRIVERS_DIR="$PLUGINS_DIR/sqldrivers"
+TEMP_QT_SQL_BACKUP_DIR=""
+QT_SQLDRIVERS_SOURCE_DIR=""
+
+restore_qt_sql_plugins() {
+    if [ -z "$TEMP_QT_SQL_BACKUP_DIR" ] || [ ! -d "$TEMP_QT_SQL_BACKUP_DIR" ] || [ -z "$QT_SQLDRIVERS_SOURCE_DIR" ]; then
+        return 0
+    fi
+
+    if [ -f "$TEMP_QT_SQL_BACKUP_DIR/libqsqlpsql.dylib.original" ]; then
+        cp -f "$TEMP_QT_SQL_BACKUP_DIR/libqsqlpsql.dylib.original" "$QT_SQLDRIVERS_SOURCE_DIR/libqsqlpsql.dylib"
+    fi
+
+    local backed_up_plugin
+    for backed_up_plugin in "$TEMP_QT_SQL_BACKUP_DIR"/libqsql*.dylib; do
+        [ -e "$backed_up_plugin" ] || continue
+
+        if [ "$(basename "$backed_up_plugin")" = "libqsqlpsql.dylib.original" ]; then
+            continue
+        fi
+
+        mv -f "$backed_up_plugin" "$QT_SQLDRIVERS_SOURCE_DIR/"
+    done
+
+    rm -rf "$TEMP_QT_SQL_BACKUP_DIR"
+}
+
+cleanup() {
+    restore_qt_sql_plugins
+}
+trap cleanup EXIT
 
 rewrite_dependency() {
     local target_file="$1"
@@ -100,6 +130,58 @@ find_qt_psql_plugin() {
     return 1
 }
 
+find_brew_libpq() {
+    if ! command -v brew >/dev/null 2>&1; then
+        return 1
+    fi
+
+    local brew_prefix
+    brew_prefix="$(brew --prefix libpq 2>/dev/null || true)"
+    if [ -z "$brew_prefix" ] || [ ! -d "$brew_prefix/lib" ]; then
+        return 1
+    fi
+
+    local candidate
+    for candidate in \
+        "$brew_prefix/lib/libpq.5.dylib" \
+        "$brew_prefix/lib/libpq.dylib" \
+        "$brew_prefix/lib/libpq"*.dylib
+    do
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+prepare_qt_sql_plugins() {
+    local psql_plugin="$1"
+    QT_SQLDRIVERS_SOURCE_DIR="$(cd "$(dirname "$psql_plugin")" && pwd)"
+    TEMP_QT_SQL_BACKUP_DIR="$(mktemp -d)"
+
+    local sql_plugin
+    for sql_plugin in "$QT_SQLDRIVERS_SOURCE_DIR"/libqsql*.dylib; do
+        [ -e "$sql_plugin" ] || continue
+
+        if [ "$sql_plugin" != "$psql_plugin" ]; then
+            mv -f "$sql_plugin" "$TEMP_QT_SQL_BACKUP_DIR/"
+        fi
+    done
+
+    cp -f "$psql_plugin" "$TEMP_QT_SQL_BACKUP_DIR/libqsqlpsql.dylib.original"
+
+    local current_libpq
+    current_libpq="$(otool -L "$psql_plugin" | awk '/libpq.*dylib/{print $1; exit}')"
+    local brew_libpq
+    brew_libpq="$(find_brew_libpq || true)"
+
+    if [ -n "$current_libpq" ] && [ -n "$brew_libpq" ] && [ "$current_libpq" != "$brew_libpq" ]; then
+        install_name_tool -change "$current_libpq" "$brew_libpq" "$psql_plugin"
+    fi
+}
+
 if ! command -v macdeployqt >/dev/null 2>&1; then
     echo "macdeployqt is not in PATH. Add your Qt bin directory to PATH first."
     exit 1
@@ -116,15 +198,17 @@ if ! command -v hdiutil >/dev/null 2>&1; then
     exit 1
 fi
 
-macdeployqt "$APP_PATH" -qmldir="$QML_DIR"
-
-mkdir -p "$FRAMEWORKS_DIR" "$SQLDRIVERS_DIR"
-
 QT_PSQL_PLUGIN="$(find_qt_psql_plugin || true)"
 if [ -z "$QT_PSQL_PLUGIN" ]; then
     echo "Qt PostgreSQL plugin libqsqlpsql.dylib not found. QPSQL deployment cannot continue."
     exit 1
 fi
+
+prepare_qt_sql_plugins "$QT_PSQL_PLUGIN"
+
+macdeployqt "$APP_PATH" -qmldir="$QML_DIR"
+
+mkdir -p "$FRAMEWORKS_DIR" "$SQLDRIVERS_DIR"
 
 cp -fL "$QT_PSQL_PLUGIN" "$SQLDRIVERS_DIR/libqsqlpsql.dylib"
 chmod 755 "$SQLDRIVERS_DIR/libqsqlpsql.dylib"

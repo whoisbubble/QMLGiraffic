@@ -1,4 +1,4 @@
-name: Desktop Builds v2
+name: Desktop Builds v3
 
 on:
   workflow_dispatch:
