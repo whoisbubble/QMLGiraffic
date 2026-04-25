@@ -176,9 +176,22 @@ bool DatabaseManager::registerUser(const QString &username, const QString &passw
     // 1. Превращаем обычный пароль в SHA-256 хэш
     QString hashedPassword = QString(QCryptographicHash::hash(passwordHash.toUtf8(), QCryptographicHash::Sha256).toHex());
 
+    {
+        QSqlQuery portableQuery;
+        portableQuery.prepare("CALL giraffic.register_app_user(?, ?)");
+        portableQuery.addBindValue(username);
+        portableQuery.addBindValue(hashedPassword);
+
+        if (!portableQuery.exec()) {
+            setLastError(portableQuery.lastError().text());
+            return false;
+        }
+        return true;
+    }
+
     QSqlQuery query;
-    query.prepare("CALL giraffic.register_app_user(:u, :p)");
-    query.bindValue(":u", username);
+    query.prepare("CALL giraffic.register_app_user(?, ?)");
+    query.addBindValue(username);
     query.bindValue(":p", hashedPassword); // Отправляем в базу ХЭШ через бинды (ANTI SQL INJECTIONs)!
 
     if (!query.exec()) {
@@ -195,6 +208,69 @@ QString DatabaseManager::currentUserRole() const {
 bool DatabaseManager::loginUser(const QString &username, const QString &passwordHash) {
     // Хэшируем пароль
     QString hashedPassword = QString(QCryptographicHash::hash(passwordHash.toUtf8(), QCryptographicHash::Sha256).toHex());
+
+    {
+        QString portableRoleCode;
+        QString portableErrorMsg;
+
+        QSqlQuery portableQuery;
+        portableQuery.prepare("CALL giraffic.sp_process_login_new(?, ?, ?, ?, ?, ?)");
+        portableQuery.addBindValue(username);
+        portableQuery.addBindValue(hashedPassword);
+        portableQuery.addBindValue("127.0.0.1");
+        portableQuery.addBindValue("Giraffic Qt Desktop App");
+        portableQuery.addBindValue(QString(), QSql::Out);
+        portableQuery.addBindValue(QString(), QSql::Out);
+
+        if (!portableQuery.exec()) {
+            setLastError(portableQuery.lastError().databaseText());
+            return false;
+        }
+
+        if (portableQuery.next()) {
+            portableRoleCode = portableQuery.value(0).toString();
+            portableErrorMsg = portableQuery.value(1).toString();
+        } else {
+            portableRoleCode = portableQuery.boundValue(4).toString();
+            portableErrorMsg = portableQuery.boundValue(5).toString();
+        }
+
+        if (!portableErrorMsg.isEmpty()) {
+            setLastError(portableErrorMsg);
+            return false;
+        }
+
+        if (portableRoleCode.isEmpty()) portableRoleCode = "giraffic_guest";
+        m_currentUserRole = portableRoleCode;
+
+        qDebug() << "РђСѓС‚РµРЅС‚РёС„РёРєР°С†РёСЏ СѓСЃРїРµС€РЅР°. Р РѕР»СЊ:" << m_currentUserRole;
+
+        disconnectDatabase();
+
+        const DatabaseConfig config = loadDatabaseConfig();
+
+        bool ok = false;
+        if (m_currentUserRole == "giraffic_admin") {
+            qDebug() << "РџРµСЂРµРїРѕРґРєР»СЋС‡Р°РµРјСЃСЏ Рє Р‘Р” РєР°Рє giraffic_admin...";
+            ok = connectToDatabase(config.adminUser, config.adminPassword);
+        }
+        else if (m_currentUserRole == "giraffic_manager") {
+            qDebug() << "РџРµСЂРµРїРѕРґРєР»СЋС‡Р°РµРјСЃСЏ Рє Р‘Р” РєР°Рє giraffic_manager...";
+            ok = connectToDatabase(config.managerUser, config.managerPassword);
+        }
+        else {
+            qDebug() << "Р’РѕР·РІСЂР°С‰Р°РµРј РїСЂР°РІР° РіРѕСЃС‚СЏ...";
+            ok = connectToDatabase();
+        }
+
+        if (ok) {
+            emit currentUserRoleChanged(m_currentUserRole);
+            return true;
+        } else {
+            setLastError("РљСЂРёС‚РёС‡РµСЃРєР°СЏ РѕС€РёР±РєР° РїРµСЂРµРїРѕРґРєР»СЋС‡РµРЅРёСЏ: " + lastError());
+            return false;
+        }
+    }
 
     QString roleCode = "";
     QString errorMsg = "";
